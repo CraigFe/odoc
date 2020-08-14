@@ -90,7 +90,7 @@ val sg :
               `Value (`Module (`Root (Common.root, Root), M), id);
              doc = <<docs>>;
              type_ =
-              Odoc_model.Lang.TypeExpr.Arrow (None,
+              Odoc_model.Lang.TypeExpr.Arrow (None, <<docs>>,
                Odoc_model.Lang.TypeExpr.Constr
                 (`Identifier
                    (`Type (`Module (`Root (Common.root, Root), M), t), false),
@@ -145,7 +145,7 @@ val sg :
                       (`Module (`Root (Common.root, Root), Mextended), id);
                    doc = <<docs>>;
                    type_ =
-                    Odoc_model.Lang.TypeExpr.Arrow (None,
+                    Odoc_model.Lang.TypeExpr.Arrow (None, <<docs>>,
                      Odoc_model.Lang.TypeExpr.Constr
                       (`Identifier
                          (`Type
@@ -173,7 +173,7 @@ val sg :
               `Value (`Module (`Root (Common.root, Root), Mextended), ignore);
              doc = <<docs>>;
              type_ =
-              Odoc_model.Lang.TypeExpr.Arrow (None,
+              Odoc_model.Lang.TypeExpr.Arrow (None, <<docs>>,
                Odoc_model.Lang.TypeExpr.Constr
                 (`Identifier
                    (`Type (`Module (`Root (Common.root, Root), Mextended), t),
@@ -204,7 +204,7 @@ val sg :
             `Value (`Module (`Root (Common.root, Root), M), id);
            doc = <<docs>>;
            type_ =
-            Odoc_model.Lang.TypeExpr.Arrow (None,
+            Odoc_model.Lang.TypeExpr.Arrow (None, <<docs>>,
              Odoc_model.Lang.TypeExpr.Constr
               (`Identifier
                  (`Type (`Module (`Root (Common.root, Root), M), t), false),
@@ -256,7 +256,7 @@ val sg :
                   `Value (`Module (`Root (Common.root, Root), Mextended), id);
                  doc = <<docs>>;
                  type_ =
-                  Odoc_model.Lang.TypeExpr.Arrow (None,
+                  Odoc_model.Lang.TypeExpr.Arrow (None, <<docs>>,
                    Odoc_model.Lang.TypeExpr.Constr
                     (`Identifier
                        (`Type
@@ -283,7 +283,7 @@ val sg :
             `Value (`Module (`Root (Common.root, Root), Mextended), ignore);
            doc = <<docs>>;
            type_ =
-            Odoc_model.Lang.TypeExpr.Arrow (None,
+            Odoc_model.Lang.TypeExpr.Arrow (None, <<docs>>,
              Odoc_model.Lang.TypeExpr.Constr
               (`Identifier
                  (`Type (`Module (`Root (Common.root, Root), Mextended), t),
@@ -317,7 +317,7 @@ val sg :
             `Value (`Module (`Root (Common.root, Root), M), id);
            doc = <<docs>>;
            type_ =
-            Odoc_model.Lang.TypeExpr.Arrow (None,
+            Odoc_model.Lang.TypeExpr.Arrow (None, <<docs>>,
              Odoc_model.Lang.TypeExpr.Constr
               (`Identifier
                  (`Type (`Module (`Root (Common.root, Root), M), t), false),
@@ -369,7 +369,7 @@ val sg :
                   `Value (`Module (`Root (Common.root, Root), Mextended), id);
                  doc = <<docs>>;
                  type_ =
-                  Odoc_model.Lang.TypeExpr.Arrow (None,
+                  Odoc_model.Lang.TypeExpr.Arrow (None, <<docs>>,
                    Odoc_model.Lang.TypeExpr.Constr
                     (`Identifier
                        (`Type
@@ -396,7 +396,7 @@ val sg :
             `Value (`Module (`Root (Common.root, Root), Mextended), ignore);
            doc = <<docs>>;
            type_ =
-            Odoc_model.Lang.TypeExpr.Arrow (None,
+            Odoc_model.Lang.TypeExpr.Arrow (None, <<docs>>,
              Odoc_model.Lang.TypeExpr.Constr
               (`Identifier
                  (`Type (`Module (`Root (Common.root, Root), Mextended), t),

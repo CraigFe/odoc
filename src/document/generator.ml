@@ -336,7 +336,7 @@ struct
     | Alias (te, alias) ->
       type_expr ~needs_parentheses:true te ++
       O.txt " " ++ O.keyword "as" ++ O.txt " '" ++ O.txt alias
-    | Arrow (None, src, dst) ->
+    | Arrow (None, _doc, src, dst) -> (* TODO: handle doc-comments here *)
       let res =
         type_expr ~needs_parentheses:true src ++
         O.txt " " ++ Syntax.Type.arrow ++ O.txt " " ++ type_expr dst
@@ -345,7 +345,7 @@ struct
         res
       else
         enclose ~l:"(" res ~r:")"
-    | Arrow (Some lbl, src, dst) ->
+    | Arrow (Some lbl, _doc, src, dst) -> (* TODO: handle doc-comment here *)
       let res =
         O.span (
           label lbl ++ O.txt ":" ++ type_expr ~needs_parentheses:true src
@@ -1043,10 +1043,10 @@ struct
     match cd with
     | ClassType expr -> class_type_expr expr
     (* TODO: factorize the following with [type_expr] *)
-    | Arrow (None, src, dst) ->
+    | Arrow (None, _doc, src, dst) -> (* TODO: Handle doc-comments here *)
       type_expr ~needs_parentheses:true src ++
         O.txt " " ++ Syntax.Type.arrow ++ O.txt " " ++ class_decl dst
-    | Arrow (Some lbl, src, dst) ->
+    | Arrow (Some lbl, _doc, src, dst) -> (* TODO: Handle doc-comments here *)
       label lbl ++ O.txt ":" ++
         type_expr ~needs_parentheses:true src ++
         O.txt " " ++ Syntax.Type.arrow ++ O.txt " " ++ class_decl dst

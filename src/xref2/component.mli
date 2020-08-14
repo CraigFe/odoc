@@ -120,7 +120,7 @@ and TypeExpr : sig
     | Var of string
     | Any
     | Alias of t * string
-    | Arrow of label option * t * t
+    | Arrow of label option * CComment.docs * t * t
     | Tuple of t list
     | Constr of Cpath.type_ * t list
     | Polymorphic_variant of TypeExpr.Polymorphic_variant.t
@@ -291,7 +291,7 @@ end
 and Class : sig
   type decl =
     | ClassType of ClassType.expr
-    | Arrow of TypeExpr.label option * TypeExpr.t * decl
+    | Arrow of TypeExpr.label option * CComment.docs * TypeExpr.t * decl
 
   type t = {
     doc : CComment.docs;

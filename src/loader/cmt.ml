@@ -207,7 +207,7 @@ let rec read_class_type env parent params cty =
       let lbl = Cmi.read_label lbl in
       let arg = read_core_type env arg in
       let res = read_class_type env parent params res in
-        Arrow(lbl, arg, res)
+        Arrow(lbl, [], arg, res)
 #if OCAML_MAJOR = 4 && OCAML_MINOR >= 06 && OCAML_MINOR < 08
   | Tcty_open (_, _, _, _, cty) -> read_class_type env parent params cty
 #elif OCAML_MAJOR = 4 && OCAML_MINOR >= 08
@@ -305,7 +305,7 @@ let rec read_class_expr env parent params cl =
       let lbl = Cmi.read_label lbl in
       let arg = Cmi.read_type_expr env arg.pat_type in
       let res = read_class_expr env parent params res in
-        Arrow(lbl, arg, res)
+        Arrow(lbl, [], arg, res)
   | Tcl_let(_, _, _, cl) ->
       read_class_expr env parent params cl
   | Tcl_constraint(cl, None, _, _, _) ->

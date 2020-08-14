@@ -254,7 +254,7 @@ end =
 and Class : sig
   type decl =
     | ClassType of ClassType.expr
-    | Arrow of TypeExpr.label option * TypeExpr.t * decl
+    | Arrow of TypeExpr.label option * Comment.docs * TypeExpr.t * decl
 
   type t = {
     id : Identifier.Class.t;
@@ -365,7 +365,7 @@ and TypeExpr : sig
     | Var of string
     | Any
     | Alias of t * string
-    | Arrow of label option * t * t
+    | Arrow of label option * Comment.docs * t * t
     | Tuple of t list
     | Constr of Path.Type.t * t list
     | Polymorphic_variant of TypeExpr.Polymorphic_variant.t

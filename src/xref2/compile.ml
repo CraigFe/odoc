@@ -216,8 +216,8 @@ and class_ env parent c =
   let rec map_decl = function
     | ClassType expr ->
         ClassType (class_type_expr env (c.id :> Id.ClassSignature.t) expr)
-    | Arrow (lbl, expr, decl) ->
-        Arrow (lbl, type_expression env container expr, map_decl decl)
+    | Arrow (lbl, doc, expr, decl) ->
+        Arrow (lbl, doc, type_expression env container expr, map_decl decl)
   in
   { c with type_ = map_decl c.type_; expansion }
 
@@ -723,8 +723,8 @@ and type_expression : Env.t -> Id.Parent.t -> _ -> _ =
   match texpr with
   | Var _ | Any -> texpr
   | Alias (t, str) -> Alias (type_expression env parent t, str)
-  | Arrow (lbl, t1, t2) ->
-      Arrow (lbl, type_expression env parent t1, type_expression env parent t2)
+  | Arrow (lbl, doc, t1, t2) ->
+      Arrow (lbl, doc, type_expression env parent t1, type_expression env parent t2)
   | Tuple ts -> Tuple (List.map (type_expression env parent) ts)
   | Constr (path, ts') -> (
       let cp' = Component.Of_Lang.(type_path empty path) in

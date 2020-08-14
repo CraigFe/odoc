@@ -132,7 +132,7 @@ and TypeExpr : sig
     | Var of string
     | Any
     | Alias of t * string
-    | Arrow of label option * t * t
+    | Arrow of label option * CComment.docs * t * t
     | Tuple of t list
     | Constr of Cpath.type_ * t list
     | Polymorphic_variant of TypeExpr.Polymorphic_variant.t
@@ -314,7 +314,7 @@ end =
 and Class : sig
   type decl =
     | ClassType of ClassType.expr
-    | Arrow of TypeExpr.label option * TypeExpr.t * decl
+    | Arrow of TypeExpr.label option * CComment.docs * TypeExpr.t * decl
 
   type t = {
     doc : CComment.docs;
@@ -664,7 +664,7 @@ module Fmt = struct
     | Var x -> Format.fprintf ppf "%s" x
     | Any -> Format.fprintf ppf "_"
     | Alias (x, y) -> Format.fprintf ppf "(alias %a %s)" type_expr x y
-    | Arrow (_l, t1, t2) ->
+    | Arrow (_l, _doc, t1, t2) ->
         Format.fprintf ppf "%a -> %a" type_expr t1 type_expr t2
     | Tuple ts -> Format.fprintf ppf "(%a)" type_expr_list ts
     | Constr (p, args) -> (
@@ -1712,8 +1712,12 @@ module Of_Lang = struct
     | Any -> Any
     | Constr (p, xs) ->
         Constr (type_path ident_map p, List.map (type_expression ident_map) xs)
-    | Arrow (lbl, t1, t2) ->
-        Arrow (lbl, type_expression ident_map t1, type_expression ident_map t2)
+    | Arrow (lbl, doc, t1, t2) ->
+        Arrow
+          ( lbl,
+            docs ident_map doc,
+            type_expression ident_map t1,
+            type_expression ident_map t2 )
     | Tuple ts -> Tuple (List.map (type_expression ident_map) ts)
     | Polymorphic_variant v ->
         Polymorphic_variant (type_expr_polyvar ident_map v)
@@ -1918,8 +1922,12 @@ module Of_Lang = struct
     let open Odoc_model.Lang.Class in
     match c with
     | ClassType e -> Class.ClassType (class_type_expr ident_map e)
-    | Arrow (lbl, e, d) ->
-        Arrow (lbl, type_expression ident_map e, class_decl ident_map d)
+    | Arrow (lbl, doc, e, d) ->
+        Arrow
+          ( lbl,
+            docs ident_map doc,
+            type_expression ident_map e,
+            class_decl ident_map d )
 
   and class_type_expr ident_map e =
     let open Odoc_model.Lang.ClassType in

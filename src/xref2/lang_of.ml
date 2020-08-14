@@ -423,9 +423,10 @@ and class_decl map parent c =
   match c with
   | Component.Class.ClassType expr ->
       ClassType (class_type_expr map parent expr)
-  | Arrow (lbl, t, d) ->
+  | Arrow (lbl, doc, t, d) ->
       Arrow
         ( lbl,
+          docs (parent :> Identifier.LabelParent.t) doc,
           type_expr map (parent :> Identifier.Parent.t) t,
           class_decl map parent d )
 
@@ -806,8 +807,12 @@ and type_expr map (parent : Identifier.Parent.t) (t : Component.TypeExpr.t) :
     | Var s -> Var s
     | Any -> Any
     | Alias (t, str) -> Alias (type_expr map parent t, str)
-    | Arrow (lbl, t1, t2) ->
-        Arrow (lbl, type_expr map parent t1, type_expr map parent t2)
+    | Arrow (lbl, doc, t1, t2) ->
+      Arrow
+        ( lbl,
+          docs (parent :> Identifier.LabelParent.t) doc,
+          type_expr map parent t1,
+          type_expr map parent t2 )
     | Tuple ts -> Tuple (List.map (type_expr map parent) ts)
     | Constr (path, ts) ->
         Constr (Path.type_ map path, List.map (type_expr map parent) ts)

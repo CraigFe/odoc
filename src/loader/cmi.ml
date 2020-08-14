@@ -374,7 +374,7 @@ let rec read_type_expr env typ =
           in
           let lbl = read_label lbl in
           let res = read_type_expr env res in
-            Arrow(lbl, arg, res)
+            Arrow(lbl, [], arg, res)
       | Ttuple typs ->
           let typs = List.map (read_type_expr env) typs in
             Tuple typs
@@ -816,7 +816,7 @@ let rec read_class_type env parent params =
       in
       let lbl = read_label lbl in
       let cty = read_class_type env parent params cty in
-        Arrow(lbl, arg, cty)
+        Arrow(lbl, [], arg, cty)
 
 let read_class_declaration env parent id cld =
   let open Class in

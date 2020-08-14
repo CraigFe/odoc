@@ -1533,7 +1533,7 @@ let rec class_signature_of_class :
   let rec inner decl =
     match decl with
     | Component.Class.ClassType e -> class_signature_of_class_type_expr env e
-    | Arrow (_, _, d) -> inner d
+    | Arrow (_, _, _, d) -> inner d
   in
   inner c.type_
 

@@ -375,7 +375,7 @@ and type_expr s t =
     | Var s -> Var s
     | Any -> Any
     | Alias (t, str) -> Alias (type_expr s t, str)
-    | Arrow (lbl, t1, t2) -> Arrow (lbl, type_expr s t1, type_expr s t2)
+    | Arrow (lbl, doc, t1, t2) -> Arrow (lbl, doc, type_expr s t1, type_expr s t2)
     | Tuple ts -> Tuple (List.map (type_expr s) ts)
     | Constr (p, ts) -> Constr (type_path s p, List.map (type_expr s) ts)
     | Polymorphic_variant v -> Polymorphic_variant (type_poly_var s v)
@@ -523,7 +523,7 @@ and class_decl s =
   let open Component.Class in
   function
   | ClassType e -> ClassType (class_type_expr s e)
-  | Arrow (lbl, t, d) -> Arrow (lbl, type_expr s t, class_decl s d)
+  | Arrow (lbl, doc, t, d) -> Arrow (lbl, doc, type_expr s t, class_decl s d)
 
 and class_type_expr s =
   let open Component.ClassType in

@@ -11,6 +11,8 @@ type arrow = int -> int
 
 type higher_order = (int -> int) -> int
 
+type commented_arrow = int (** foo *) -> int
+
 type labeled = l:int -> int
 
 type optional = ?l:int -> int
