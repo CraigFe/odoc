@@ -226,7 +226,7 @@ let rec documentedSrc ~resolve (t : DocumentedSrc.t) : item Html.elt list =
   let take_code l =
     Doctree.Take.until l ~classify:(function
       | Code code -> Accum code
-      | Alternative (Expansion {summary; _}) -> Accum summary
+      (* | Alternative (Expansion {summary; _}) -> Accum summary *)
       | _ -> Stop_and_keep
     )
   in
@@ -301,12 +301,12 @@ and items ~resolve l : item Html.elt list =
       :: rest ->
       let included_html = (items content :> any Html.elt list) in
       let docs = (block ~resolve doc :> any Html.elt list) in
-      let summary = source (inline ~resolve) summary in
+      let summary = documentedSrc ~resolve summary in
       let content : any Html.elt list =
         let mk b =
           let a = if b then [Html.a_open ()] else [] in
           [Html.details ~a
-              (Html.summary [Html.span ~a:[Html.a_class ["def"]] summary])
+              (Html.summary [Html.span ~a:[Html.a_class ["def"]] (List.map Html.Unsafe.coerce_elt summary)])
               included_html]
         in
         match status with

@@ -117,7 +117,7 @@ and DocumentedSrc : sig
 end = DocumentedSrc
 
 and Alternative : sig
-  type expansion = { status:[ `Inline | `Open | `Closed | `Default ]; summary: Source.t; expansion: DocumentedSrc.t; url: Url.Path.t }
+  type expansion = { status:[ `Inline | `Open | `Closed | `Default ]; summary: DocumentedSrc.t; expansion: DocumentedSrc.t; url: Url.Path.t }
   type t =
     | Expansion of expansion
 
@@ -143,7 +143,7 @@ and Include : sig
   type t = {
     status : status ;
     content : Item.t list ;
-    summary: Source.t
+    summary: DocumentedSrc.t
   }
 
 end = Include

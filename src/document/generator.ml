@@ -57,6 +57,9 @@ let type_var tv =
 let enclose ~l ~r x =
   O.span (fun ppf -> O.pf ppf "%s%t%s" l x r)
 
+let enclose_dsrc ~l ~r x =
+  O.documentedSrc (O.txt l) @ x @ O.documentedSrc (O.txt r)
+
 let path p txt =
   !O.elt [inline @@ InternalLink (InternalLink.Resolved (Url.from_path p, txt))]
 let resolved p txt =
@@ -69,12 +72,11 @@ let path_to_id path =
   | Error _ -> None
   | Ok url -> Some url
 
-let attach_expansion ?(status=`Default) (eq, o, e) page text =
+let attach_expansion ?(status=`Default) (eq, o, e) page summary =
   match page with
-  | None -> O.documentedSrc (text)
+  | None -> summary
   | Some (page : Page.t) ->
     let url = page.url in
-    let summary = O.render text in
     let expansion =
       O.documentedSrc (O.txt eq ++ O.keyword o)
       @ DocumentedSrc.[Subpage { status ; content = page }]
@@ -209,7 +211,7 @@ end
 
 module Type_expression :
 sig
-  val type_expr : ?needs_parentheses:bool -> Lang.TypeExpr.t -> text
+  val type_expr : ?needs_parentheses:bool -> Lang.TypeExpr.t -> DocumentedSrc.t
 
   val format_type_path :
     delim:[ `parens | `brackets ] -> Lang.TypeExpr.t list -> text -> text
@@ -407,6 +409,8 @@ struct
     typath ++
       O.txt " = " ++
       type_expr te
+
+  let type_expr ?needs_parentheses t = O.documentedSrc (type_expr ?needs_parentheses t)
 end
 open Type_expression
 
@@ -427,9 +431,9 @@ sig
     ?delim:[ `parens | `brackets ] ->
     Lang.TypeDecl.param list -> text
 
-  val format_manifest : ?is_substitution:bool -> ?compact_variants:bool -> Lang.TypeDecl.Equation.t -> text * bool
+  val format_manifest : ?is_substitution:bool -> ?compact_variants:bool -> Lang.TypeDecl.Equation.t -> DocumentedSrc.t * bool
 
-  val format_constraints : (Lang.TypeExpr.t * Lang.TypeExpr.t) list -> text
+  val format_constraints : (Lang.TypeExpr.t * Lang.TypeExpr.t) list -> DocumentedSrc.t
 end =
 struct
   let record fields =
@@ -440,17 +444,12 @@ struct
         let name = Paths.Identifier.name id in
         let attrs = ["def"; "record"; url.kind] in
         let cell =
-          (* O.td ~a:[ O.a_class ["def"; kind ] ]
-           *   [O.a ~a:[O.a_href ("#" ^ anchor); O.a_class ["anchor"]] []
-           *   ; *)
-              O.code (
-                (if mutable_ then O.keyword "mutable" ++ O.txt " " else O.noop)
-                ++ O.txt name
-                ++ O.txt Syntax.Type.annotation_separator
-                ++ type_expr typ
-                ++ O.txt Syntax.Type.Record.field_separator
-              )
-            (* ] *)
+          O.documentedSrc
+            ((if mutable_ then O.keyword "mutable" ++ O.txt " " else O.noop)
+             ++ O.txt name
+             ++ O.txt Syntax.Type.annotation_separator)
+          @ type_expr typ
+          @ O.documentedSrc (O.txt Syntax.Type.Record.field_separator)
         in
         url, attrs, cell
     in
@@ -463,15 +462,10 @@ struct
         let anchor = Some url in
         let rhs = Comment.to_ir fld.doc in
         let doc = if not (Comment.has_doc fld.doc) then [] else rhs in
-        DocumentedSrc.Documented { anchor; attrs; code; doc }
+        DocumentedSrc.Nested { anchor; attrs; code; doc }
       )
     in
-    let content =
-      O.documentedSrc (O.txt "{")
-      @ rows
-      @ O.documentedSrc (O.txt "}")
-    in
-    content
+    enclose_dsrc ~l:"{" rows ~r:"}"
 
 
   let constructor
@@ -484,7 +478,7 @@ struct
       let cstr = tag kind (O.txt name) in
       let is_gadt, ret_type =
         match ret_type with
-        | None -> false, O.noop
+        | None -> false, []
         | Some te ->
           let constant =
             match args with
@@ -492,36 +486,37 @@ struct
             | _ -> false
           in
           let ret_type =
-            O.txt " " ++
-              (if constant then O.txt ":" else Syntax.Type.GADT.arrow) ++
-              O.txt " " ++
-              type_expr te
+            O.documentedSrc
+              (enclose ~l:" " ~r:" "
+                 (if constant then O.txt ":" else Syntax.Type.GADT.arrow))
+            @ type_expr te
           in
           true, ret_type
       in
       match args with
-      | Tuple [] -> O.documentedSrc (cstr ++ ret_type)
+      | Tuple [] -> O.documentedSrc cstr @ ret_type
       | Tuple lst ->
-        let params = O.list lst
-            ~sep:(O.txt Syntax.Type.Tuple.element_separator)
-            ~f:(type_expr ~needs_parentheses:is_gadt)
+         let params =
+           List.map (type_expr ~needs_parentheses:is_gadt) lst
+           |> List.flatten
         in
-        O.documentedSrc (cstr ++
-            (if Syntax.Type.Variant.parenthesize_params
-              then O.txt "(" ++ params ++ O.txt ")"
-              else
-                (if is_gadt then
-                    O.txt Syntax.Type.annotation_separator
-                  else
-                    O.txt " " ++ O.keyword "of" ++ O.txt " ") ++
-                  params
-            )
-          ++ ret_type)
+        O.documentedSrc cstr
+        @ (if Syntax.Type.Variant.parenthesize_params
+           then enclose_dsrc ~l:"(" params ~r:")"
+           else
+             O.documentedSrc
+               (if is_gadt then
+                  O.txt Syntax.Type.annotation_separator
+                else
+                  O.txt " " ++ O.keyword "of" ++ O.txt " ")
+             @ params
+          )
+        @ ret_type
       | Record fields ->
         if is_gadt then
           O.documentedSrc (cstr ++ O.txt Syntax.Type.annotation_separator)
           @ record fields
-          @ O.documentedSrc ret_type
+          @ ret_type
         else
           O.documentedSrc (cstr ++ O.txt " " ++ O.keyword "of" ++ O.txt " ")
           @ record fields
@@ -605,12 +600,12 @@ struct
       let kind_approx, cstr, doc =
         match item with
         | Odoc_model.Lang.TypeExpr.Polymorphic_variant.Type te ->
-          "unknown", O.code (type_expr te), None
+          "unknown", type_expr te, None
         | Constructor {constant; name; arguments; doc; _} ->
           let cstr = "`" ^ name in
           "constructor",
           begin match arguments with
-          | [] -> O.code (O.txt cstr)
+          | [] -> O.documentedSrc (O.txt cstr)
           | _ ->
             (* Multiple arguments in a polymorphic variant constructor correspond
                to a conjunction of types, not a product: [`Lbl int&float].
@@ -620,23 +615,24 @@ struct
             let wrapped_type_expr =
               (* type conjunction in Reason is printed as `Lbl (t1)&(t2)` *)
               if Syntax.Type.Variant.parenthesize_params then
-                fun x -> O.txt "(" ++ type_expr x ++ O.txt ")"
+                fun x -> enclose_dsrc ~l:"(" (type_expr x) ~r:")"
               else
                 fun x -> type_expr x
             in
-            let params = O.list arguments
-                ~sep:(O.txt " & ")
-                ~f:wrapped_type_expr
+            let params =
+              arguments
+              |> List.map wrapped_type_expr
+              |> Utils.intersperse ~sep:(O.documentedSrc (O.txt " & "))
+              |> List.flatten
             in
             let params =
-              if constant then O.txt "& " ++ params else params in
-            O.code (
-              O.txt cstr ++
-                (
-                  if Syntax.Type.Variant.parenthesize_params
-                  then params
-                  else O.txt " " ++ O.keyword "of" ++ O.txt " " ++ params
-                )
+              (if constant then O.documentedSrc (O.txt "& ") else []) @ params
+            in
+            O.documentedSrc (O.txt cstr)
+            @ (
+              if Syntax.Type.Variant.parenthesize_params
+              then params
+              else O.documentedSrc (O.txt " " ++ O.keyword "of" ++ O.txt " ") @ params
             )
           end,
           match doc with
@@ -650,20 +646,20 @@ struct
         let attrs = ["def"; url.kind] in
         let anchor = Some url in
         let code =
-          O.code (O.txt "| ") @ cstr
+          O.documentedSrc (O.txt "| ") @ cstr
         in
         let doc = match doc with
           | None -> []
           | Some doc -> doc
         in
-        DocumentedSrc.Documented { attrs ; anchor ; code ; doc }
+        DocumentedSrc.Nested { attrs ; anchor ; code ; doc }
       with Failure s ->
         Printf.eprintf "ERROR: %s\n%!" s;
-        let code = O.code (O.txt "| " ) @ cstr in
+        let code = O.documentedSrc (O.txt "| " ) @ cstr in
         let attrs = ["def"; kind_approx] in
         let doc = [] in
         let anchor = None in
-        DocumentedSrc.Documented { attrs ; anchor ; code ; doc }
+        DocumentedSrc.Nested { attrs ; anchor ; code ; doc }
     in
     let variants = List.map row t.elements in
     let intro, ending = match t.kind with
@@ -710,31 +706,32 @@ struct
     )
 
   let format_constraints constraints =
-    O.list constraints ~f:begin fun (t1, t2) ->
-      O.txt " " ++
-      O.keyword "constraint" ++
-      O.txt " " ++
-      type_expr t1 ++
-      O.txt " = " ++
-      type_expr t2
-    end
+    constraints
+    |> List.map (fun (t1, t2) ->
+           O.documentedSrc (enclose ~l:" " (O.keyword "constraint") ~r:" ")
+           @ type_expr t1
+           @ O.documentedSrc (O.txt " = ")
+           @ type_expr t2
+         )
+    |> List.flatten
 
   let format_manifest
     : 'inner_row 'outer_row. ?is_substitution:bool -> ?compact_variants:bool
     -> Odoc_model.Lang.TypeDecl.Equation.t
-    -> text * bool
+    -> DocumentedSrc.t * bool
   = fun ?(is_substitution=false) ?(compact_variants=true) equation ->
     let _ = compact_variants in (* TODO *)
     let private_ = equation.private_ in
     match equation.manifest with
-    | None -> O.noop, private_
+    | None -> [], private_
     | Some t ->
       let manifest =
-        O.txt (if is_substitution then " := " else " = ") ++
-        (if private_ then
-            O.keyword Syntax.Type.private_keyword ++ O.txt " "
-        else O.noop) ++
-        type_expr t
+        O.documentedSrc (
+            O.txt (if is_substitution then " := " else " = ")
+            ++ (if private_ then
+                  O.keyword Syntax.Type.private_keyword ++ O.txt " "
+                else O.noop))
+        @ type_expr t
       in
       manifest, false
 
@@ -763,7 +760,7 @@ struct
         let manifest, need_private =
           format_manifest ~is_substitution t.equation
         in
-        O.documentedSrc manifest, need_private
+        manifest, need_private
     in
     let representation =
       match t.representation with
@@ -799,7 +796,7 @@ struct
       O.documentedSrc (keyword' ++ O.txt " " ++ tconstr)
       @ manifest
       @ representation
-      @ O.documentedSrc constraints
+      @ constraints
       @ O.documentedSrc
           (if Syntax.Type.type_def_semicolon then O.txt ";" else O.noop)
     in
@@ -825,10 +822,10 @@ struct
         O.keyword Syntax.Value.variable_keyword ++
           O.txt " " ++
           O.txt name ++
-          O.txt Syntax.Type.annotation_separator ++
-          type_expr t.type_
-        ++ (if Syntax.Value.semicolon then O.txt ";" else O.noop)
-      )
+          O.txt Syntax.Type.annotation_separator
+        )
+      @ type_expr t.type_
+      @ O.documentedSrc (if Syntax.Value.semicolon then O.txt ";" else O.noop)
     in
     let kind = Some "value" in
     let anchor = path_to_id t.id in
@@ -842,10 +839,10 @@ struct
         O.keyword Syntax.Value.variable_keyword ++
           O.txt " " ++
           O.txt name ++
-          O.txt Syntax.Type.annotation_separator ++
-          type_expr t.type_
-        ++ (if Syntax.Type.External.semicolon then O.txt ";" else O.noop)
+          O.txt Syntax.Type.annotation_separator
       )
+      @ type_expr t.type_
+      @ O.documentedSrc (if Syntax.Type.External.semicolon then O.txt ";" else O.noop)
     in
     let kind = Some "external" in
     let anchor = path_to_id t.id in
@@ -960,9 +957,9 @@ struct
           private_ ++
           virtual_ ++
           O.txt name ++
-          O.txt Syntax.Type.annotation_separator ++
-          type_expr t.type_
+          O.txt Syntax.Type.annotation_separator
       )
+      @ type_expr t.type_
     in
     let kind = Some "method" in
     let anchor = path_to_id t.id in
@@ -982,9 +979,9 @@ struct
           mutable_ ++
           virtual_ ++
           O.txt name ++
-          O.txt Syntax.Type.annotation_separator ++
-          type_expr t.type_
+          O.txt Syntax.Type.annotation_separator
       )
+      @ type_expr t.type_
     in
     let kind = Some "instance-variable" in
     let anchor = path_to_id t.id in
@@ -1005,9 +1002,7 @@ struct
     Item.Declaration {kind ; anchor ; doc ; content}
 
   let constraint_ t1 t2 =
-    let content =
-      O.documentedSrc (format_constraints [(t1, t2)])
-    in
+    let content = format_constraints [(t1, t2)] in
     let kind = None in
     let anchor = None in
     let doc = [] in
@@ -1041,15 +1036,17 @@ struct
 
   let rec class_decl (cd : Odoc_model.Lang.Class.decl) =
     match cd with
-    | ClassType expr -> class_type_expr expr
+    | ClassType expr -> O.documentedSrc (class_type_expr expr)
     (* TODO: factorize the following with [type_expr] *)
     | Arrow (None, _doc, src, dst) -> (* TODO: Handle doc-comments here *)
-      type_expr ~needs_parentheses:true src ++
-        O.txt " " ++ Syntax.Type.arrow ++ O.txt " " ++ class_decl dst
+       type_expr ~needs_parentheses:true src
+       @ O.documentedSrc (O.txt " " ++ Syntax.Type.arrow ++ O.txt " ")
+       @ class_decl dst
     | Arrow (Some lbl, _doc, src, dst) -> (* TODO: Handle doc-comments here *)
-      label lbl ++ O.txt ":" ++
-        type_expr ~needs_parentheses:true src ++
-        O.txt " " ++ Syntax.Type.arrow ++ O.txt " " ++ class_decl dst
+       O.documentedSrc (label lbl ++ O.txt ":")
+       @ type_expr ~needs_parentheses:true src
+       @ O.documentedSrc (O.txt " " ++ Syntax.Type.arrow ++ O.txt " ")
+       @ class_decl dst
 
   let class_ recursive (t : Odoc_model.Lang.Class.t) =
     let name = Paths.Identifier.name t.id in
@@ -1071,7 +1068,10 @@ struct
         O.documentedSrc @@ path url [inline @@ Text name],
         Some page
     in
-    let summary = O.txt Syntax.Type.annotation_separator ++ class_decl t.type_ in
+    let summary =
+      O.documentedSrc (O.txt Syntax.Type.annotation_separator)
+      @ class_decl t.type_
+    in
     let cd =
       attach_expansion
         (Syntax.Type.annotation_separator,"object","end") expansion summary
@@ -1119,7 +1119,7 @@ struct
     let expr =
       attach_expansion
         (" = ","object","end")
-        expansion (class_type_expr t.expr)
+        expansion (O.documentedSrc (class_type_expr t.expr))
     in
     let content =
       let open Lang.Signature in
@@ -1236,9 +1236,9 @@ struct
           O.documentedSrc (
             O.keyword "module" ++ O.txt " " ++
             O.txt (Paths.Identifier.name arg.id) ++
-              O.txt Syntax.Type.annotation_separator ++
-              mty (arg.id :> Paths.Identifier.Signature.t) render_ty
+            O.txt Syntax.Type.annotation_separator
           )
+          @ mty (arg.id :> Paths.Identifier.Signature.t) render_ty
         | Some expansion ->
           let expansion =
             match expansion with
@@ -1259,9 +1259,8 @@ struct
             let title = name in
             let content = { Page.items ; title ; header ; url } in
             let summary =
-              O.render (
-                O.txt Syntax.Type.annotation_separator
-                ++ mty (arg.id :> Paths.Identifier.Signature.t) render_ty)
+              O.documentedSrc (O.txt Syntax.Type.annotation_separator)
+              @ mty (arg.id :> Paths.Identifier.Signature.t) render_ty
             in
             let status = `Default in
             let expansion =
@@ -1398,11 +1397,12 @@ struct
       Item.Declaration {kind ; anchor ; doc ; content}
 
   and module_decl (base : Paths.Identifier.Signature.t) md =
-    begin match md with
-    | Alias _ -> O.txt " = "
-    | ModuleType _ -> O.txt Syntax.Type.annotation_separator
-    end ++
-      module_decl' base md
+    O.documentedSrc (
+        match md with
+        | Alias _ -> O.txt " = "
+        | ModuleType _ -> O.txt Syntax.Type.annotation_separator
+      )
+    @ module_decl' base md
 
   and extract_path_from_mt ~(default: Paths.Identifier.Signature.t) =
     let open Odoc_model.Lang.ModuleType in
@@ -1415,10 +1415,10 @@ struct
     | _ -> default
 
   and module_decl'
-    : Paths.Identifier.Signature.t -> Odoc_model.Lang.Module.decl -> text =
+    : Paths.Identifier.Signature.t -> Odoc_model.Lang.Module.decl -> DocumentedSrc.t =
     fun base -> function
       | Alias mod_path ->
-        Link.from_path (mod_path :> Paths.Path.t)
+        O.documentedSrc (Link.from_path (mod_path :> Paths.Path.t))
       | ModuleType mt -> mty (extract_path_from_mt ~default:base mt) mt
 
   and module_type (t : Odoc_model.Lang.ModuleType.t) =
@@ -1451,9 +1451,10 @@ struct
     in
     let summary =
       match t.expr with
-      | None -> O.noop
+      | None -> []
       | Some expr ->
-        O.txt " = " ++ mty (t.id :> Paths.Identifier.Signature.t) expr
+         O.documentedSrc (O.txt " = ")
+         @ mty (t.id :> Paths.Identifier.Signature.t) expr
     in
     let mty =
       attach_expansion (" = ","sig","end") expansion summary
@@ -1475,16 +1476,20 @@ struct
     Item.Declaration {kind ; anchor ; doc ; content}
 
   and mty
-    : Paths.Identifier.Signature.t -> Odoc_model.Lang.ModuleType.expr -> text
+    : Paths.Identifier.Signature.t -> Odoc_model.Lang.ModuleType.expr -> DocumentedSrc.t
     = fun base -> function
       | Path mty_path ->
-        Link.from_path (mty_path :> Paths.Path.t)
+        O.documentedSrc (Link.from_path (mty_path :> Paths.Path.t))
       | Signature _ ->
-        Syntax.Mod.open_tag ++ O.txt " ... " ++ Syntax.Mod.close_tag
+        O.documentedSrc (Syntax.Mod.open_tag ++ O.txt " ... " ++ Syntax.Mod.close_tag)
       | Functor (Unit, expr) ->
-        (if Syntax.Mod.functor_keyword then O.keyword "functor" else O.noop) ++
-          O.txt " () " ++ Syntax.Type.arrow ++ O.txt " " ++
-          mty base expr
+         O.documentedSrc (
+             (if Syntax.Mod.functor_keyword then O.keyword "functor" else O.noop)
+             ++ O.txt " () "
+             ++ Syntax.Type.arrow
+             ++ O.txt " "
+           )
+          @ mty base expr
       | Functor (Named arg, expr) ->
         let arg_expr = match arg.display_expr with | Some e -> e | None -> arg.expr in
         let name =
@@ -1497,42 +1502,50 @@ struct
           | Error _ -> O.txt name
           | Ok href -> resolved href [inline @@ Text name]
         in
-        (if Syntax.Mod.functor_keyword then O.keyword "functor" else O.noop) ++
-          O.txt " (" ++ name ++ O.txt Syntax.Type.annotation_separator ++
-          mty base arg_expr ++
-          O.txt ")" ++ O.txt " " ++ Syntax.Type.arrow ++ O.txt " " ++
-          mty base expr
+        O.documentedSrc (
+            (if Syntax.Mod.functor_keyword then O.keyword "functor" else O.noop)
+            ++ O.txt " ("
+            ++ name
+            ++ O.txt Syntax.Type.annotation_separator
+          )
+        @ mty base arg_expr
+        @ O.documentedSrc (O.txt ")" ++ O.txt " " ++ Syntax.Type.arrow ++ O.txt " ")
+        @ mty base expr
       | With (expr, substitutions) ->
-        mty base expr ++
-          O.txt " " ++
-          O.keyword "with" ++
-          O.txt " " ++
-          O.list
-            ~sep:(O.txt " " ++ O.keyword "and" ++ O.txt " ")
-            ~f:(substitution base)
-            substitutions
+         mty base expr
+         @ O.documentedSrc (O.txt " " ++ O.keyword "with" ++ O.txt " ")
+         @ (
+           substitutions
+           |> List.map (substitution base)
+           |> Utils.intersperse ~sep:(O.documentedSrc @@ O.txt " " ++ O.keyword "and" ++ O.txt " ")
+           |> List.flatten
+         )
       | TypeOf (MPath m) ->
-        O.keyword "module" ++
-          O.txt " " ++
-          O.keyword "type" ++
-          O.txt " " ++
-          O.keyword "of" ++
-          O.txt " " ++
-          Link.from_path (m :> Paths.Path.t)
+         O.documentedSrc (
+             O.keyword "module" ++
+               O.txt " " ++
+               O.keyword "type" ++
+               O.txt " " ++
+               O.keyword "of" ++
+               O.txt " " ++
+               Link.from_path (m :> Paths.Path.t)
+           )
       | TypeOf (Struct_include m) ->
-        O.keyword "module" ++
-          O.txt " " ++
-          O.keyword "type" ++
-          O.txt " " ++
-          O.keyword "of" ++
-          O.txt " " ++
-          O.keyword "struct" ++
-          O.txt " " ++
-          O.keyword "include" ++
-          O.txt " " ++
-          Link.from_path (m :> Paths.Path.t) ++
-          O.txt " " ++
-          O.keyword "end"
+         O.documentedSrc (
+             O.keyword "module" ++
+               O.txt " " ++
+               O.keyword "type" ++
+               O.txt " " ++
+               O.keyword "of" ++
+               O.txt " " ++
+               O.keyword "struct" ++
+               O.txt " " ++
+               O.keyword "include" ++
+               O.txt " " ++
+               Link.from_path (m :> Paths.Path.t) ++
+               O.txt " " ++
+               O.keyword "end"
+           )
 
   (* TODO : Centralize the list juggling for type parameters *)
   and type_expr_in_subst ~base td typath =
@@ -1543,36 +1556,42 @@ struct
 
   and substitution
     : Paths.Identifier.Signature.t -> Odoc_model.Lang.ModuleType.substitution
-      -> text
+      -> DocumentedSrc.t
     = fun base -> function
       | ModuleEq (frag_mod, md) ->
-        O.keyword "module" ++
-          O.txt " " ++
-          Link.from_fragment ~base (frag_mod :> Paths.Fragment.t)
-        ++ O.txt " = " ++
-          module_decl' base md
+         O.documentedSrc (
+             O.keyword "module"
+             ++ O.txt " "
+             ++ Link.from_fragment ~base (frag_mod :> Paths.Fragment.t)
+             ++ O.txt " = "
+           )
+         @ module_decl' base md
       | TypeEq (frag_typ, td) ->
-        O.keyword "type" ++
-          O.txt " " ++
-          type_expr_in_subst ~base td (frag_typ :> Paths.Fragment.t) ++
-          fst (format_manifest td) ++
-          format_constraints td.Odoc_model.Lang.TypeDecl.Equation.constraints
+         O.documentedSrc (
+             O.keyword "type" ++
+               O.txt " " ++
+               type_expr_in_subst ~base td (frag_typ :> Paths.Fragment.t)
+           )
+         @ fst (format_manifest td)
+         @ format_constraints td.Odoc_model.Lang.TypeDecl.Equation.constraints
       | ModuleSubst (frag_mod, mod_path) ->
-        O.keyword "module" ++
-          O.txt " " ++
-          Link.from_fragment
-            ~base (frag_mod :> Paths.Fragment.t) ++
-          O.txt " := " ++
-          Link.from_path (mod_path :> Paths.Path.t)
+         O.documentedSrc (
+             O.keyword "module"
+             ++ O.txt " "
+             ++ Link.from_fragment ~base (frag_mod :> Paths.Fragment.t)
+             ++ O.txt " := "
+             ++ Link.from_path (mod_path :> Paths.Path.t)
+          )
       | TypeSubst (frag_typ, td) ->
-        O.keyword "type" ++
-          O.txt " " ++
-          type_expr_in_subst ~base td (frag_typ :> Paths.Fragment.t) ++
-          O.txt " := " ++
-          match td.Lang.TypeDecl.Equation.manifest with
-          | None -> assert false (* cf loader/cmti *)
-          | Some te ->
-            type_expr te
+         O.documentedSrc (
+             O.keyword "type"
+             ++ O.txt " "
+             ++ type_expr_in_subst ~base td (frag_typ :> Paths.Fragment.t)
+             ++ O.txt " := "
+           )
+         @ (match td.Lang.TypeDecl.Equation.manifest with
+            | None -> assert false (* cf loader/cmti *)
+            | Some te -> type_expr te)
 
   and include_ (t : Odoc_model.Lang.Include.t) =
     (* Special-case the construct 'include module type of struct include X end'
@@ -1585,15 +1604,11 @@ struct
       else if List.exists is_closed_tag t.doc then `Closed
       else `Default
     in
-    
     let content = signature t.expansion.content in
     let summary =
-      O.render (
-        O.keyword "include" ++
-          O.txt " " ++
-          module_decl' t.parent t.decl ++
-          (if Syntax.Mod.include_semicolon then O.keyword ";" else O.noop)
-      )
+      O.documentedSrc (O.keyword "include" ++ O.txt " ")
+      @ module_decl' t.parent t.decl
+      @ O.documentedSrc (if Syntax.Mod.include_semicolon then O.keyword ";" else O.noop)
     in
     let content = {Include. content; status; summary} in
     let kind = Some "include" in

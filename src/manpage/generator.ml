@@ -413,8 +413,8 @@ let expansion_not_inlined url = not (Link.should_inline url)
 let take_code l =
   let c, _, rest = Take.until l ~classify:(function
     | DocumentedSrc.Code c -> Accum c
-    | DocumentedSrc.Alternative (Expansion e)
-      when expansion_not_inlined e.url -> Accum e.summary
+    (* | DocumentedSrc.Alternative (Expansion e)
+     *   when expansion_not_inlined e.url -> Accum e.summary *)
     | _ -> Stop_and_keep)
   in
   c, rest
@@ -508,7 +508,7 @@ and item ~nested (l : Item.t list) = match l with
       let d = if inline_subpage status then
           item ~nested content
         else
-          let s = source_code summary in
+          let s = documentedSrc summary in
           match doc with
           | [] -> s
           | doc -> s ++ indent 2 (break ++ block doc)

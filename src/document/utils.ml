@@ -15,3 +15,7 @@ let rec flatmap ?sep ~f = function
 let rec skip_until ~p = function
   | [] -> []
   | h :: t -> if p h then t else skip_until ~p t
+
+let rec intersperse ~sep = function
+  | ([] | [ _ ] as l) -> l
+  | x :: xs -> x :: sep :: intersperse ~sep xs
